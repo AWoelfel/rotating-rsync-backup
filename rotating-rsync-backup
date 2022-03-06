@@ -1,0 +1,75 @@
+#!/usr/bin/env sh
+
+################################################################################
+# Help                                                                         #
+################################################################################
+Help()
+{
+   # Display Help
+   echo "A rsync based backup script with rotation."
+   echo
+   echo "Syntax: rotating-rsync-backup <SOURCE> <TARGET> <KEEP_NUM> <TODAY>"
+   echo "options:"
+   echo "<SOURCE>    backup this directory."
+   echo "<TARGET>    ... into this directory."
+   echo "<KEEP_NUM>  ... while keeping this many copies."
+   echo "<TODAY>     selector to distinguish different backups"
+   echo
+}
+
+if [ "$#" -eq 4 ]
+    then
+      SOURCE=$1
+      TARGET=$2
+      KEEP_NUM=$3
+      TODAY=$4
+    else
+      Help
+      exit 1
+fi
+
+
+################################################################################
+# CODE                                                                         #
+################################################################################
+TARGET_DIRECTORY="${TARGET}/${TODAY}"
+TARGET_BACKUP_DIRECTORY="${TARGET_DIRECTORY}/backup"
+TARGET_LOGFILE="${TARGET_DIRECTORY}/backup.log"
+TARGET_RSYNC_LOGFILE="${TARGET_DIRECTORY}/rsync.log"
+
+if [ -d "${TARGET_DIRECTORY}" ]; then
+  rm -rf "${TARGET_DIRECTORY}"
+
+  echo "!!! WARNING !!! RESETTING DIR ${TARGET_DIRECTORY}... !!! WARNING !!! "
+  mkdir -p "${TARGET_DIRECTORY}"
+  echo "!!! WARNING !!! RESETTING DIR ${TARGET_DIRECTORY}... !!! WARNING !!! "  >> $TARGET_LOGFILE
+else
+  mkdir -p "${TARGET_DIRECTORY}"
+fi
+
+echo "EXECUTING : ${0} ${*}" >> $TARGET_LOGFILE
+rsync -ahr --no-o --no-g --no-perms --progress --log-file="${TARGET_RSYNC_LOGFILE}" "${SOURCE}" "${TARGET_BACKUP_DIRECTORY}"
+
+EXISTING_BACKUPS=$(find "${TARGET}/" -maxdepth 1 -mindepth 1 -type d -print | sort -r)
+NUMBER_OF_BACKUPS=$(echo "${EXISTING_BACKUPS}"| wc -l )
+NUMBER_OF_BACKUPS_TO_DROP=$((NUMBER_OF_BACKUPS - KEEP_NUM))
+
+if [ "$NUMBER_OF_BACKUPS_TO_DROP" -gt "0" ]; then
+
+  echo "" >> "$TARGET_LOGFILE"
+  echo "" >> "$TARGET_LOGFILE"
+
+  (IFS='
+  '
+
+    for line in $(echo "${EXISTING_BACKUPS}" | tail -$NUMBER_OF_BACKUPS_TO_DROP); do
+      echo "DROPPING ${line}"  >> "$TARGET_LOGFILE"
+      rm -rf "${line}"
+    done
+
+  )
+
+fi
+
+
+
